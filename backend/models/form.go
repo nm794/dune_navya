@@ -26,18 +26,12 @@ type Field struct {
 	Label       string    `json:"label" bson:"label"`
 	Required    bool      `json:"required" bson:"required"`
 	Placeholder string    `json:"placeholder,omitempty" bson:"placeholder,omitempty"`
-	Options     []string  `json:"options,omitempty" bson:"options,omitempty"` // for MC/checkbox
-
-	// Order used by the builder to keep field ordering
-	Order int `json:"order" bson:"order"`
-
-	// Validation ranges (what your handlers reference)
-	MinValue *int `json:"minValue,omitempty" bson:"minValue,omitempty"` // for number/rating
-	MaxValue *int `json:"maxValue,omitempty" bson:"maxValue,omitempty"` // for number/rating
-
-	// (If your frontend uses min/max instead, they can co-exist safely)
-	Min *int `json:"min,omitempty" bson:"min,omitempty"`
-	Max *int `json:"max,omitempty" bson:"max,omitempty"`
+	Options     []string  `json:"options,omitempty" bson:"options,omitempty"`
+	Order       int       `json:"order" bson:"order"`
+	MinValue    *int      `json:"minValue,omitempty" bson:"minValue,omitempty"`
+	MaxValue    *int      `json:"maxValue,omitempty" bson:"maxValue,omitempty"`
+	Min         *int      `json:"min,omitempty" bson:"min,omitempty"`
+	Max         *int      `json:"max,omitempty" bson:"max,omitempty"`
 }
 
 // Form is the top-level entity users create
@@ -79,29 +73,47 @@ type FieldStats struct {
 	NumberSummary      *NumberSummary    `json:"numberSummary,omitempty" bson:"numberSummary,omitempty"`
 }
 
-// Analytics represents analytics data for a form
-type Analytics struct {
-	FormID         primitive.ObjectID    `json:"formId" bson:"formId"`
-	TotalResponses int                   `json:"totalResponses" bson:"totalResponses"`
-	FieldAnalytics map[string]FieldStats `json:"fieldAnalytics" bson:"fieldAnalytics"`
-	LastUpdated    time.Time             `json:"lastUpdated" bson:"lastUpdated"`
+// Trend/extra types
+type RatingPoint struct {
+	Date    string  `json:"date" bson:"date"`
+	Average float64 `json:"average" bson:"average"`
 }
 
-// CreateFormRequest represents the request to create a form
+type MostSkippedItem struct {
+	FieldID    string `json:"fieldId" bson:"fieldId"`
+	FieldLabel string `json:"fieldLabel" bson:"fieldLabel"`
+	Count      int    `json:"count" bson:"count"`
+}
+
+type TopOption struct {
+	Option string `json:"option" bson:"option"`
+	Count  int    `json:"count" bson:"count"`
+}
+
+// Analytics represents analytics data for a form
+type Analytics struct {
+	FormID          primitive.ObjectID    `json:"formId" bson:"formId"`
+	TotalResponses  int                   `json:"totalResponses" bson:"totalResponses"`
+	FieldAnalytics  map[string]FieldStats `json:"fieldAnalytics" bson:"fieldAnalytics"`
+	LastUpdated     time.Time             `json:"lastUpdated" bson:"lastUpdated"`
+	RatingOverTime  []RatingPoint         `json:"ratingOverTime,omitempty" bson:"ratingOverTime,omitempty"`
+	MostSkipped     []MostSkippedItem     `json:"mostSkipped,omitempty" bson:"mostSkipped,omitempty"`
+	TopOptions      map[string]TopOption  `json:"topOptions,omitempty" bson:"topOptions,omitempty"`
+}
+
+// Create/Update/Submit request DTOs
 type CreateFormRequest struct {
 	Title       string  `json:"title" validate:"required"`
 	Description string  `json:"description"`
 	Fields      []Field `json:"fields" validate:"required,min=1"`
 }
 
-// UpdateFormRequest represents the request to update a form
 type UpdateFormRequest struct {
 	Title       string  `json:"title" validate:"required"`
 	Description string  `json:"description"`
 	Fields      []Field `json:"fields" validate:"required,min=1"`
 }
 
-// SubmitResponseRequest represents the request to submit a response
 type SubmitResponseRequest struct {
 	FormID    string                 `json:"formId" validate:"required"`
 	Responses map[string]interface{} `json:"responses" validate:"required"`

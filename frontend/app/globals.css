@@ -10,7 +10,7 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
   
   .btn-secondary {
@@ -22,7 +22,7 @@
   }
   
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
   
   .card {
@@ -30,7 +30,7 @@
   }
   
   .form-field {
-    @apply bg-white border border-gray-300 rounded-lg p-4 hover:border-primary-300 transition-colors duration-200;
+    @apply bg-white border border-gray-300 rounded-lg p-4 hover:border-blue-300 transition-colors duration-200;
   }
   
   .form-field.dragging {
@@ -38,7 +38,7 @@
   }
   
   .form-field.drag-over {
-    @apply border-primary-500 bg-primary-50;
+    @apply border-blue-500 bg-blue-50;
   }
 }
 
@@ -54,4 +54,4 @@
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-} 
+}

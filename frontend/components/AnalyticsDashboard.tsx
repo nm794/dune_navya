@@ -1,336 +1,301 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useRef } from 'react'
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+import { useEffect, useRef, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
   LineChart,
-  Line
-} from 'recharts'
-import { Analytics, FieldStats } from '../types/form'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { Users, TrendingUp, Clock, CheckCircle } from 'lucide-react'
+  ResponsiveContainer,
+  Tooltip,
+  XAxis, YAxis
+} from "recharts";
+import { useWebSocket } from "../hooks/useWebSocket";
 
-interface AnalyticsDashboardProps {
-  formId: string
-}
+type FieldStats = {
+  fieldId: string;
+  fieldLabel: string;
+  fieldType: string;
+  responseCount: number;
+  averageRating?: number;
+  ratingDistribution?: Record<string, number>;
+  optionCounts?: Record<string, number>;
+  textResponses?: string[];
+  numberSummary?: { average: number; min: number; max: number };
+};
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D']
+type RatingPoint = { date: string; average: number };
+type MostSkippedItem = { fieldId: string; fieldLabel: string; count: number };
+type TopOption = { option: string; count: number };
 
-export default function AnalyticsDashboard({ formId }: AnalyticsDashboardProps) {
-  const [analytics, setAnalytics] = useState<Analytics | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [timeRange, setTimeRange] = useState('7d')
-  
-  const { lastMessage } = useWebSocket('ws://localhost:8080/ws')
-  const intervalRef = useRef<NodeJS.Timeout>()
+type Analytics = {
+  formId: string;
+  totalResponses: number;
+  recentResponses: number;
+  fieldAnalytics: Record<string, FieldStats>;
+  lastUpdated: string;
+  ratingOverTime?: RatingPoint[];
+  mostSkipped?: MostSkippedItem[];
+  topOptions?: Record<string, TopOption>;
+};
 
-  useEffect(() => {
-    loadAnalytics()
-    
-    // Set up polling for real-time updates
-    intervalRef.current = setInterval(loadAnalytics, 5000)
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [formId])
+export default function AnalyticsDashboard({ formId }: { formId: string }) {
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState("all");
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    if (lastMessage && lastMessage.type === 'new_response') {
-      const data = lastMessage.data
-      if (data.formId === formId) {
-        // Reload analytics when new response is received
-        loadAnalytics()
-      }
-    }
-  }, [lastMessage, formId])
+  const { lastMessage } = useWebSocket("ws://localhost:8081/ws"); // proxied in next.config.js
 
   const loadAnalytics = async () => {
     try {
-      const response = await fetch(`/api/analytics/${formId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setAnalytics(data)
-        setError(null)
-      } else {
-        setError('Failed to load analytics')
-      }
-    } catch (error) {
-      setError('Error loading analytics')
-      console.error('Error loading analytics:', error)
+      const response = await fetch(`/api/analytics/${formId}`);
+      if (!response.ok) throw new Error("Failed to load analytics");
+      const data = await response.json();
+      setAnalytics(data);
+      setError(null);
+    } catch (e) {
+      setError("Error loading analytics");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const getResponseTrendData = () => {
-    // Mock data for response trends - in real app, this would come from the API
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    return days.map((day, index) => ({
-      day,
-      responses: Math.floor(Math.random() * 20) + 5,
-    }))
-  }
+  useEffect(() => {
+    loadAnalytics();
+    intervalRef.current = setInterval(loadAnalytics, 20000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formId]);
 
-  const getFieldChartData = (fieldStats: FieldStats) => {
-    if (fieldStats.fieldType === 'multiple_choice' || fieldStats.fieldType === 'checkbox') {
-      return Object.entries(fieldStats.optionCounts || {}).map(([option, count]) => ({
-        option,
-        count,
-      }))
+  useEffect(() => {
+    if (lastMessage && (lastMessage as any).type === "new_response") {
+      const data = (lastMessage as any).data;
+      if (data.formId === formId) loadAnalytics();
     }
-    return []
-  }
-
-  const renderFieldChart = (fieldStats: FieldStats) => {
-    const data = getFieldChartData(fieldStats)
-    
-    if (data.length === 0) return null
-
-    return (
-      <div key={fieldStats.fieldId} className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          {fieldStats.fieldLabel}
-        </h3>
-        
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="option" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="count" fill="#3B82F6" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    )
-  }
-
-  const renderRatingChart = (fieldStats: FieldStats) => {
-    if (fieldStats.fieldType !== 'rating' || !fieldStats.averageRating) return null
-
-    const data = [
-      { rating: '1★', count: Math.floor(Math.random() * 10) },
-      { rating: '2★', count: Math.floor(Math.random() * 15) },
-      { rating: '3★', count: Math.floor(Math.random() * 20) },
-      { rating: '4★', count: Math.floor(Math.random() * 25) },
-      { rating: '5★', count: Math.floor(Math.random() * 30) },
-    ]
-
-    return (
-      <div key={fieldStats.fieldId} className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          {fieldStats.fieldLabel}
-        </h3>
-        
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-primary-600">
-              {fieldStats.averageRating.toFixed(1)}
-            </div>
-            <div className="text-sm text-gray-600">Average Rating</div>
-          </div>
-        </div>
-        
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="rating" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="count" fill="#F59E0B" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    )
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessage, formId]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading analytics...</p>
-        </div>
+      <div className="min-h-[60vh] grid place-items-center">
+        <p className="text-gray-600 dark:text-gray-300">Loading analytics...</p>
       </div>
-    )
+    );
+  }
+  if (error || !analytics) {
+    return (
+      <div className="min-h-[60vh] grid place-items-center">
+        <p className="text-red-600">{error ?? "No analytics data available"}</p>
+      </div>
+    );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 text-lg mb-2">Error</div>
-          <p className="text-gray-600">{error}</p>
-        </div>
-      </div>
-    )
-  }
+  const fieldList = Object.values(analytics.fieldAnalytics || {});
 
-  if (!analytics) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">No analytics data available</p>
-        </div>
-      </div>
-    )
-  }
+  const getFieldChartData = (fs: FieldStats) => {
+    if (fs.fieldType === "multiple_choice" || fs.fieldType === "checkbox") {
+      return Object.entries(fs.optionCounts || {}).map(([option, count]) => ({
+        option,
+        count,
+      }));
+    }
+    if (fs.fieldType === "rating" && fs.ratingDistribution) {
+      return Object.entries(fs.ratingDistribution).map(([rating, count]) => ({
+        rating,
+        count,
+      }));
+    }
+    return [];
+  };
+
+  const section = "bg-white dark:bg-gray-800 border rounded-xl p-4 shadow-sm";
+  const card = "bg-white dark:bg-gray-800 border rounded-xl p-4 shadow-sm";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen space-y-6">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-              <p className="text-gray-600">Real-time insights from your form responses</p>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="input-field w-32"
-              >
-                <option value="24h">Last 24h</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="all">All time</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Responses</p>
-                <p className="text-2xl font-bold text-gray-900">{analytics.totalResponses}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Response Rate</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {analytics.totalResponses > 0 ? 'Active' : 'No responses'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Clock className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Last Updated</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {new Date(analytics.lastUpdated).toLocaleTimeString()}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Completion Rate</p>
-                <p className="text-2xl font-bold text-gray-900">95%</p>
-              </div>
-            </div>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
+          <p className="text-gray-600 dark:text-gray-300">
+            Real-time insights from your form responses
+          </p>
         </div>
 
-        {/* Response Trends */}
-        <div className="card mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Response Trends</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={getResponseTrendData()}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="responses" stroke="#3B82F6" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <div className="flex items-center gap-3">
+          <a
+            className="px-3 py-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+            href={`/api/responses/${analytics.formId}/csv`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            ⬇️ Export CSV
+          </a>
 
-        {/* Field Analytics */}
-        <div className="space-y-8">
-          <h2 className="text-xl font-semibold text-gray-900">Field Analytics</h2>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {Object.values(analytics.fieldAnalytics).map((fieldStats) => {
-              if (fieldStats.fieldType === 'rating') {
-                return renderRatingChart(fieldStats)
-              } else if (['multiple_choice', 'checkbox'].includes(fieldStats.fieldType)) {
-                return renderFieldChart(fieldStats)
-              }
-              return null
-            })}
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="px-3 py-2 border rounded-lg bg-white dark:bg-gray-800"
+          >
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className={card}>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Total Responses</p>
+          <p className="text-3xl font-semibold">{analytics.totalResponses}</p>
+        </div>
+        <div className={card}>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Recent (24h)</p>
+          <p className="text-3xl font-semibold">{analytics.recentResponses}</p>
+        </div>
+        <div className={card}>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Last Updated</p>
+          <p className="text-lg">{new Date(analytics.lastUpdated).toLocaleTimeString()}</p>
+        </div>
+      </div>
+
+      {/* Rating trend */}
+      {analytics.ratingOverTime && analytics.ratingOverTime.length > 0 && (
+        <div className={section}>
+          <h3 className="font-semibold mb-3">Rating Trend</h3>
+          <div className="w-full h-64">
+            <ResponsiveContainer>
+              <LineChart data={analytics.ratingOverTime}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis domain={[0, 5]} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="average" />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
+      )}
 
-        {/* Text Responses */}
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Text Responses</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {Object.values(analytics.fieldAnalytics)
-              .filter(field => ['text', 'textarea', 'email'].includes(field.fieldType))
-              .map(fieldStats => (
-                <div key={fieldStats.fieldId} className="card">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    {fieldStats.fieldLabel}
-                  </h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {fieldStats.textResponses?.slice(0, 10).map((response, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-700">{response}</p>
-                      </div>
-                    ))}
-                    {(!fieldStats.textResponses || fieldStats.textResponses.length === 0) && (
-                      <p className="text-gray-500 text-sm">No text responses yet</p>
-                    )}
+      {/* Field breakdowns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {fieldList.map((fs) => {
+          if (["multiple_choice", "checkbox"].includes(fs.fieldType)) {
+            const data = getFieldChartData(fs);
+            return (
+              <div key={fs.fieldId} className={section}>
+                <h3 className="font-semibold mb-2">{fs.fieldLabel}</h3>
+                <div className="w-full h-64">
+                  <ResponsiveContainer>
+                    <BarChart data={data}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="option" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="count" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          }
+
+          if (fs.fieldType === "rating" && fs.averageRating !== undefined) {
+            const data = getFieldChartData(fs);
+            return (
+              <div key={fs.fieldId} className={section}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold">{fs.fieldLabel}</h3>
+                  <div className="text-sm">
+                    Avg: <strong>{fs.averageRating?.toFixed(2)}</strong>
                   </div>
                 </div>
-              ))}
-          </div>
+                <div className="w-full h-64">
+                  <ResponsiveContainer>
+                    <BarChart data={data}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="rating" />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="count" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          }
+
+          if (["text", "textarea", "email"].includes(fs.fieldType)) {
+            return (
+              <div key={fs.fieldId} className={section}>
+                <h3 className="font-semibold mb-2">{fs.fieldLabel}</h3>
+                <div className="space-y-2 max-h-64 overflow-auto">
+                  {fs.textResponses?.slice().reverse().slice(0, 10).map((t, i) => (
+                    <div key={i} className="p-2 border rounded-lg bg-white dark:bg-gray-800">
+                      {t}
+                    </div>
+                  ))}
+                  {(!fs.textResponses || fs.textResponses.length === 0) && (
+                    <p className="text-gray-500">No text responses yet</p>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        })}
+      </div>
+
+      {/* Trends: Most skipped & Top options */}
+      {(analytics.mostSkipped?.length || 0) > 0 || (analytics.topOptions && Object.keys(analytics.topOptions).length > 0) ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {analytics.mostSkipped && analytics.mostSkipped.length > 0 && (
+            <div className={section}>
+              <h3 className="font-semibold mb-2">Most Skipped Questions</h3>
+              <ul className="space-y-2">
+                {analytics.mostSkipped.map((m) => (
+                  <li key={m.fieldId} className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between">
+                    <span>{m.fieldLabel}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Skipped {m.count}x</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {analytics.topOptions && Object.keys(analytics.topOptions).length > 0 && (
+            <div className={section}>
+              <h3 className="font-semibold mb-2">Top Options (Choice Fields)</h3>
+              <ul className="space-y-2">
+                {fieldList
+                  .filter((f) => f.optionCounts && Object.keys(f.optionCounts).length > 0)
+                  .map((f) => {
+                    const top = analytics.topOptions![f.fieldId];
+                    return (
+                      <li key={f.fieldId} className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between">
+                        <span>{f.fieldLabel}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
+                          {top?.option ?? "-"} ({top?.count ?? 0})
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          )}
         </div>
-      </main>
+      ) : null}
     </div>
-  )
-} 
+  );
+}

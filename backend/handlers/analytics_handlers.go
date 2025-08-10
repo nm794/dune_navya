@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,8 +17,7 @@ import (
 	"custom-form-builder/models"
 )
 
-// GetAnalytics returns summary + per-field analytics for a form.
-// Uses local helper names to avoid collisions with other handler files.
+// GetAnalytics returns summary + per-field analytics + trends for a form.
 func GetAnalytics(client *mongo.Client) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		formID := c.Params("formId")
@@ -29,7 +29,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 		formsCol := client.Database("formbuilder").Collection("forms")
 		respCol := client.Database("formbuilder").Collection("responses")
 
-		// Load form
 		var form models.Form
 		if err := formsCol.FindOne(context.Background(), bson.M{"_id": objectID}).Decode(&form); err != nil {
 			if err == mongo.ErrNoDocuments {
@@ -39,7 +38,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch form"})
 		}
 
-		// Load responses
 		cur, err := respCol.Find(context.Background(), bson.M{"formId": objectID})
 		if err != nil {
 			log.Printf("GetAnalytics: error finding responses: %v", err)
@@ -52,13 +50,18 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 			sum   float64
 			min   *float64
 			max   *float64
-			dist  map[float64]int // internal only (converted to string keys for JSON)
+			dist  map[float64]int // internal only
 		}
 
 		fieldStats := make(map[string]models.FieldStats, len(form.Fields))
 		numAgg := make(map[string]*numericAgg)
+		skippedCount := make(map[string]int)
 
-		// Initialize field stat shells
+		// For rating trend (YYYY-MM-DD -> sum & count across all rating fields)
+		type dayAgg struct{ sum float64; count int }
+		ratingDaily := map[string]dayAgg{}
+
+		// Seed stats
 		for _, f := range form.Fields {
 			fs := models.FieldStats{
 				FieldID:       f.ID,
@@ -93,13 +96,16 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 			}
 			totalResponses++
 
+			day := doc.SubmittedAt.Format("2006-01-02")
+
 			for _, f := range form.Fields {
 				val, exists := doc.Responses[f.ID]
-				if !exists || val == nil {
+				if !exists || isEmptyLocal(val) {
+					skippedCount[f.ID]++
 					continue
 				}
-				fs := fieldStats[f.ID]
 
+				fs := fieldStats[f.ID]
 				switch f.Type {
 				case models.FieldTypeMultipleChoice:
 					if s, ok := toStringLocal(val); ok {
@@ -109,7 +115,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 						}
 						fs.OptionCounts[s]++
 					}
-
 				case models.FieldTypeCheckbox:
 					switch vv := val.(type) {
 					case []interface{}:
@@ -145,7 +150,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 							}
 						}
 					}
-
 				case models.FieldTypeRating:
 					if agg := numAgg[f.ID]; agg != nil {
 						if v, ok := asFloatLocal(val); ok {
@@ -159,9 +163,14 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 								agg.max = &v
 							}
 							agg.dist[v] = agg.dist[v] + 1
+
+							// rating trend per day (aggregate across rating fields)
+							d := ratingDaily[day]
+							d.sum += v
+							d.count++
+							ratingDaily[day] = d
 						}
 					}
-
 				case models.FieldTypeNumber:
 					if agg := numAgg[f.ID]; agg != nil {
 						if v, ok := asFloatLocal(val); ok {
@@ -176,7 +185,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 							}
 						}
 					}
-
 				case models.FieldTypeText, models.FieldTypeTextarea, models.FieldTypeEmail:
 					if s, ok := toStringLocal(val); ok && s != "" {
 						fs.ResponseCount++
@@ -189,7 +197,6 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 						}
 					}
 				}
-
 				fieldStats[f.ID] = fs
 			}
 		}
@@ -197,31 +204,73 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 			log.Printf("GetAnalytics: cursor error: %v", err)
 		}
 
-		// Finalize numeric/rating derived stats
+		// Finalize numeric/rating derived stats + topOptions per field
+		topOptions := map[string]models.TopOption{}
 		for _, f := range form.Fields {
-			if agg := numAgg[f.ID]; agg != nil {
-				fs := fieldStats[f.ID]
-				if agg.count > 0 {
-					avg := agg.sum / float64(agg.count)
-					if f.Type == models.FieldTypeRating {
-						fs.AverageRating = &avg
-						fs.RatingDistribution = map[string]int{}
-						for k, v := range agg.dist {
-							key := strconv.FormatFloat(k, 'f', -1, 64) // JSON-safe key
-							fs.RatingDistribution[key] = v
-						}
-					} else if f.Type == models.FieldTypeNumber {
-						fs.NumberSummary = &models.NumberSummary{Average: avg}
-						if agg.min != nil {
-							fs.NumberSummary.Min = *agg.min
-						}
-						if agg.max != nil {
-							fs.NumberSummary.Max = *agg.max
-						}
+			fs := fieldStats[f.ID]
+			if agg := numAgg[f.ID]; agg != nil && agg.count > 0 {
+				avg := agg.sum / float64(agg.count)
+				if f.Type == models.FieldTypeRating {
+					fs.AverageRating = &avg
+					fs.RatingDistribution = map[string]int{}
+					for k, v := range agg.dist {
+						key := strconv.FormatFloat(k, 'f', -1, 64)
+						fs.RatingDistribution[key] = v
+					}
+				} else if f.Type == models.FieldTypeNumber {
+					fs.NumberSummary = &models.NumberSummary{Average: avg}
+					if agg.min != nil {
+						fs.NumberSummary.Min = *agg.min
+					}
+					if agg.max != nil {
+						fs.NumberSummary.Max = *agg.max
 					}
 				}
 				fieldStats[f.ID] = fs
 			}
+
+			if len(fs.OptionCounts) > 0 {
+				var bestOpt string
+				bestCount := -1
+				for opt, cnt := range fs.OptionCounts {
+					if cnt > bestCount {
+						bestOpt, bestCount = opt, cnt
+					}
+				}
+				topOptions[f.ID] = models.TopOption{Option: bestOpt, Count: bestCount}
+			}
+		}
+
+		// Build rating trend points in chronological order
+		type kv struct{ date string; avg float64 }
+		tmp := make([]kv, 0, len(ratingDaily))
+		for d, a := range ratingDaily {
+			if a.count > 0 {
+				tmp = append(tmp, kv{d, a.sum / float64(a.count)})
+			}
+		}
+		sort.Slice(tmp, func(i, j int) bool { return tmp[i].date < tmp[j].date })
+		ratingOverTime := make([]models.RatingPoint, 0, len(tmp))
+		for _, p := range tmp {
+			ratingOverTime = append(ratingOverTime, models.RatingPoint{Date: p.date, Average: p.avg})
+		}
+
+		// Most skipped fields (top 3)
+		type sk struct{ id, label string; cnt int }
+		sks := make([]sk, 0, len(skippedCount))
+		for _, f := range form.Fields {
+			if cnt := skippedCount[f.ID]; cnt > 0 {
+				sks = append(sks, sk{id: f.ID, label: f.Label, cnt: cnt})
+			}
+		}
+		sort.Slice(sks, func(i, j int) bool { return sks[i].cnt > sks[j].cnt })
+		mostSkipped := []models.MostSkippedItem{}
+		for i := 0; i < len(sks) && i < 3; i++ {
+			mostSkipped = append(mostSkipped, models.MostSkippedItem{
+				FieldID:    sks[i].id,
+				FieldLabel: sks[i].label,
+				Count:      sks[i].cnt,
+			})
 		}
 
 		// Recent responses (last 24h)
@@ -241,12 +290,15 @@ func GetAnalytics(client *mongo.Client) fiber.Handler {
 			"recentResponses": recentResponses,
 			"fieldAnalytics":  fieldStats,
 			"lastUpdated":     now,
+			"ratingOverTime":  ratingOverTime,
+			"mostSkipped":     mostSkipped,
+			"topOptions":      topOptions,
 		}
 		return c.JSON(out)
 	}
 }
 
-// ---- local helpers (unique names to avoid collisions) ----
+// ---- local helpers ----
 
 func toStringLocal(v interface{}) (string, bool) {
 	switch t := v.(type) {
@@ -297,4 +349,20 @@ func splitCSVLocal(s string) []string {
 		}
 	}
 	return out
+}
+
+func isEmptyLocal(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) == ""
+	case []interface{}:
+		return len(t) == 0
+	case []string:
+		return len(t) == 0
+	default:
+		return false
+	}
 }

@@ -101,7 +101,8 @@ func main() {
 	// Responses
 	responses := api.Group("/responses")
 	responses.Post("/", handlers.SubmitResponse(client, hub))
-	responses.Get("/:formId", handlers.GetResponses(client)) // if you use this in the UI
+	responses.Get("/:formId", handlers.GetResponses(client)) 
+	responses.Get("/:formId/csv", handlers.ExportResponsesCSV(client)) // if you use this in the UI
 
 	// Analytics
 	analytics := api.Group("/analytics")
