@@ -70,8 +70,8 @@ func main() {
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept",
-		AllowMethods: "GET, POST, PUT, DELETE",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
 	}))
 
 	// WebSocket upgrade gate
@@ -88,17 +88,22 @@ func main() {
 
 	// API routes
 	api := app.Group("/api")
+
+	// Forms
 	forms := api.Group("/forms")
 	forms.Post("/", handlers.CreateForm(client))
-	forms.Get("/", handlers.GetForms(client))
-	forms.Get("/:id", handlers.GetForm(client))
-	forms.Put("/:id", handlers.UpdateForm(client))
-	forms.Delete("/:id", handlers.DeleteForm(client))
+	forms.Get("/", handlers.GetForms(client))                          // list all forms
+	forms.Get("/:id", handlers.GetForm(client))                        // get form by id
+	forms.Put("/:id", handlers.UpdateForm(client))                     // update form
+	forms.Delete("/:id", handlers.DeleteForm(client))                  // delete form
+	forms.Get("/shareable/:shareableLink", handlers.GetFormByShareableLink(client)) // get by shareable link
 
+	// Responses
 	responses := api.Group("/responses")
 	responses.Post("/", handlers.SubmitResponse(client, hub))
-	responses.Get("/:formId", handlers.GetResponses(client))
+	responses.Get("/:formId", handlers.GetResponses(client)) // if you use this in the UI
 
+	// Analytics
 	analytics := api.Group("/analytics")
 	analytics.Get("/:formId", handlers.GetAnalytics(client))
 
@@ -107,10 +112,10 @@ func main() {
 		return c.JSON(fiber.Map{"status": "healthy", "time": time.Now()})
 	})
 
-	// Start server
+	// Start server (default 8081 to match Next.js rewrite)
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8081"
 	}
 	log.Printf("Server starting on port %s", port)
 	log.Fatal(app.Listen(":" + port))
