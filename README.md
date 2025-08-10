@@ -248,4 +248,8 @@ cd frontend && npm run dev
 ```
 
 ---
+# DEMO
+Frontend: https://dune-navya.vercel.app/
+API:      https://dune-navya.onrender.com
+WS:       wss://dune-navya.onrender.com/ws
 
