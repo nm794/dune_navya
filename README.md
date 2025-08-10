@@ -259,6 +259,3 @@ cd frontend && npm run dev
 
 ---
 
-## 📄 License
-
-MIT
