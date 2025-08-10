@@ -22,10 +22,7 @@ import (
 var client *mongo.Client
 
 func init() {
-	// Load variables from .env if present (non-fatal if missing)
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found; using system environment variables")
-	}
+	_ = godotenv.Load()
 }
 
 func main() {
@@ -35,7 +32,6 @@ func main() {
 
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		// Fallback for local dev
 		mongoURI = "mongodb://127.0.0.1:27017"
 	}
 
@@ -44,18 +40,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Ping the database
 	if err := client.Ping(ctx, nil); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Connected to MongoDB!")
 
-	// Initialize WebSocket hub
+	// WebSocket hub
 	hub := appws.NewHub()
 	go hub.Run()
 
-	// Create Fiber app
+	// Fiber app with JSON error handler
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -66,12 +60,18 @@ func main() {
 		},
 	})
 
-	// Middleware
+	// CORS
+	origins := os.Getenv("ALLOWED_ORIGINS")
+	if origins == "" {
+		// For demo deploys: allow all; tighten for production if needed
+		origins = "*"
+	}
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
-		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		AllowOrigins:     origins,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowCredentials: true,
 	}))
 
 	// WebSocket upgrade gate
@@ -88,23 +88,18 @@ func main() {
 
 	// API routes
 	api := app.Group("/api")
-
-	// Forms
 	forms := api.Group("/forms")
 	forms.Post("/", handlers.CreateForm(client))
-	forms.Get("/", handlers.GetForms(client))                          // list all forms
-	forms.Get("/:id", handlers.GetForm(client))                        // get form by id
-	forms.Put("/:id", handlers.UpdateForm(client))                     // update form
-	forms.Delete("/:id", handlers.DeleteForm(client))                  // delete form
-	forms.Get("/shareable/:shareableLink", handlers.GetFormByShareableLink(client)) // get by shareable link
+	forms.Get("/", handlers.GetForms(client))
+	forms.Get("/:id", handlers.GetForm(client))
+	forms.Put("/:id", handlers.UpdateForm(client))
+	forms.Delete("/:id", handlers.DeleteForm(client))
 
-	// Responses
 	responses := api.Group("/responses")
 	responses.Post("/", handlers.SubmitResponse(client, hub))
-	responses.Get("/:formId", handlers.GetResponses(client)) 
-	responses.Get("/:formId/csv", handlers.ExportResponsesCSV(client)) // if you use this in the UI
+	responses.Get("/:formId", handlers.GetResponses(client))
+	responses.Get("/:formId/csv", handlers.ExportResponsesCSV(client))
 
-	// Analytics
 	analytics := api.Group("/analytics")
 	analytics.Get("/:formId", handlers.GetAnalytics(client))
 
@@ -113,7 +108,7 @@ func main() {
 		return c.JSON(fiber.Map{"status": "healthy", "time": time.Now()})
 	})
 
-	// Start server (default 8081 to match Next.js rewrite)
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8081"

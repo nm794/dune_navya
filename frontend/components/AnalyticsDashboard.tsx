@@ -10,7 +10,8 @@ import {
   LineChart,
   ResponsiveContainer,
   Tooltip,
-  XAxis, YAxis
+  XAxis,
+  YAxis,
 } from "recharts";
 import { useWebSocket } from "../hooks/useWebSocket";
 
@@ -48,7 +49,9 @@ export default function AnalyticsDashboard({ formId }: { formId: string }) {
   const [timeRange, setTimeRange] = useState("all");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { lastMessage } = useWebSocket("ws://localhost:8081/ws"); // proxied in next.config.js
+  // Use env-provided WS URL in prod, else rely on Next rewrites with a relative path
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "/ws";
+  const { lastMessage } = useWebSocket(wsUrl);
 
   const loadAnalytics = async () => {
     try {
@@ -57,7 +60,7 @@ export default function AnalyticsDashboard({ formId }: { formId: string }) {
       const data = await response.json();
       setAnalytics(data);
       setError(null);
-    } catch (e) {
+    } catch {
       setError("Error loading analytics");
     } finally {
       setLoading(false);
@@ -74,9 +77,23 @@ export default function AnalyticsDashboard({ formId }: { formId: string }) {
   }, [formId]);
 
   useEffect(() => {
-    if (lastMessage && (lastMessage as any).type === "new_response") {
-      const data = (lastMessage as any).data;
-      if (data.formId === formId) loadAnalytics();
+    if (!lastMessage) return;
+
+    // Be robust to string or object messages
+    let msg: any = lastMessage as any;
+    if (typeof lastMessage === "string") {
+      try {
+        msg = JSON.parse(lastMessage as unknown as string);
+      } catch {
+        // ignore parse errors for non-JSON messages
+      }
+    }
+
+    if (msg?.type === "new_response") {
+      const data = msg.data;
+      if (data?.formId === formId) {
+        loadAnalytics();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMessage, formId]);
@@ -259,16 +276,22 @@ export default function AnalyticsDashboard({ formId }: { formId: string }) {
       </div>
 
       {/* Trends: Most skipped & Top options */}
-      {(analytics.mostSkipped?.length || 0) > 0 || (analytics.topOptions && Object.keys(analytics.topOptions).length > 0) ? (
+      {(analytics.mostSkipped?.length || 0) > 0 ||
+      (analytics.topOptions && Object.keys(analytics.topOptions).length > 0) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {analytics.mostSkipped && analytics.mostSkipped.length > 0 && (
             <div className={section}>
               <h3 className="font-semibold mb-2">Most Skipped Questions</h3>
               <ul className="space-y-2">
                 {analytics.mostSkipped.map((m) => (
-                  <li key={m.fieldId} className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between">
+                  <li
+                    key={m.fieldId}
+                    className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between"
+                  >
                     <span>{m.fieldLabel}</span>
-                    <span className="text-sm text-gray-600 dark:text-gray-300">Skipped {m.count}x</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      Skipped {m.count}x
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -283,7 +306,10 @@ export default function AnalyticsDashboard({ formId }: { formId: string }) {
                   .map((f) => {
                     const top = analytics.topOptions![f.fieldId];
                     return (
-                      <li key={f.fieldId} className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between">
+                      <li
+                        key={f.fieldId}
+                        className="p-2 border rounded-lg bg-white dark:bg-gray-800 flex items-center justify-between"
+                      >
                         <span>{f.fieldLabel}</span>
                         <span className="text-sm text-gray-600 dark:text-gray-300">
                           {top?.option ?? "-"} ({top?.count ?? 0})
