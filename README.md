@@ -1,198 +1,264 @@
 # Custom Form Builder with Live Analytics
 
-A dynamic, customizable form builder application that allows users to create forms, collect responses, and view live analytics about the responses in real time.
+A dynamic, customizable form builder that lets users **create forms**, **collect responses**, and **see live analytics** in real time.
 
-## Features
-
-### Form Builder
-- Create forms with text, multiple choice, checkboxes, and rating fields
-- Support drag-and-drop reordering, field validation, and saving drafts
-- Custom form logic without relying on third-party libraries
-
-### Feedback Form
-- Generate unique shareable links per form
-- Users can fill and submit responses linked to that form
-
-### Analytics Dashboard
-- Real-time updates using WebSocket connections
-- Visual breakdowns per field with charts and graphs
-- Show trends (answer distribution, average ratings)
-
-### Backend (Go Fiber)
-- RESTful APIs to create/update forms, submit responses, and fetch analytics
-- Data validation and error handling
-- WebSocket support for real-time updates
-
-### Database (MongoDB)
-- Store flexible form schemas, responses, and metadata
-- Efficient querying for analytics
-
-## Tech Stack
-
-- **Frontend**: Next.js 14, React 18, TailwindCSS, Chart.js
-- **Backend**: Go, Fiber framework, WebSocket
-- **Database**: MongoDB
-- **Real-time**: WebSocket for live updates
-
-## Project Structure
-
-```
-├── frontend/                 # Next.js application
-│   ├── components/          # React components
-│   ├── pages/              # Next.js pages
-│   ├── hooks/              # Custom React hooks
-│   ├── utils/              # Utility functions
-│   └── styles/             # CSS and Tailwind styles
-├── backend/                 # Go Fiber API
-│   ├── handlers/           # HTTP handlers
-│   ├── models/             # Data models
-│   ├── middleware/         # Custom middleware
-│   └── websocket/          # WebSocket handlers
-└── docs/                   # Documentation
-```
-
-## Prerequisites
-
-- Node.js 18+ and npm
-- Go 1.21+
-- MongoDB 6.0+
-
-## Setup Instructions
-
-### 1. Clone and Setup
-
-```bash
-git clone <repository-url>
-cd custom-form-builder
-```
-
-### 2. Backend Setup
-
-```bash
-cd backend
-go mod tidy
-go run main.go
-```
-
-The backend will start on `http://localhost:8080`
-
-### 3. Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The frontend will start on `http://localhost:3000`
-
-### 4. Database Setup
-
-Make sure MongoDB is running locally or update the connection string in `backend/config/database.go`
-
-## API Endpoints
-
-### Forms
-- `POST /api/forms` - Create a new form
-- `GET /api/forms` - Get all forms
-- `GET /api/forms/:id` - Get form by ID
-- `PUT /api/forms/:id` - Update form
-- `DELETE /api/forms/:id` - Delete form
-
-### Responses
-- `POST /api/responses` - Submit a response
-- `GET /api/responses/:formId` - Get responses for a form
-- `GET /api/analytics/:formId` - Get analytics for a form
-
-### WebSocket
-- `ws://localhost:8080/ws` - Real-time updates for analytics
-
-## Testing Real-time Analytics
-
-1. Open the form builder and create a new form
-2. Copy the shareable link
-3. Open the link in a new tab/incognito window
-4. Submit responses
-5. Watch the analytics dashboard update in real-time
-
-## Development Challenges & Solutions
-
-### Challenge 1: Custom Form Logic
-**Solution**: Implemented a custom form state management system using React hooks without external form libraries. Created a flexible field system that supports different input types and validation.
-
-### Challenge 2: Real-time Updates
-**Solution**: Implemented WebSocket connections using Go's gorilla/websocket package for instant data synchronization between form submissions and analytics dashboard.
-
-### Challenge 3: Dynamic Form Schema
-**Solution**: Designed a flexible MongoDB schema that can store any form structure while maintaining efficient querying for analytics.
-
-### Challenge 4: Drag-and-Drop Reordering
-**Solution**: Used HTML5 drag-and-drop API with React state management to handle field reordering with visual feedback.
-
-## Assumptions Made
-
-1. **Authentication**: For MVP, forms are publicly accessible. Authentication can be added later.
-2. **Data Persistence**: Form drafts are saved automatically to localStorage for better UX.
-3. **Validation**: Client-side validation with server-side verification.
-4. **Analytics**: Real-time updates focus on response counts and basic statistics.
-
-## Future Enhancements
-
-- User authentication and form ownership
-- Export functionality (CSV/PDF)
-- Conditional field logic
-- Advanced analytics and trend analysis
-- Dark mode toggle
-- Unit tests for both frontend and backend
-- Rate limiting and security improvements
-
-## License
-
-MIT License 
-
-
-## Quick Start (Local Dev)
-
-### 0) Prereqs
-- Node.js 18+ and npm
-- Go 1.21+
-- MongoDB (local or Atlas)
-
-### 1) Backend
-```bash
-cd backend
-# create your local env from the example
-copy .env.example .env   # Windows PowerShell: cp .env.example .env
-# edit .env with your Mongo URI (Atlas recommended)
-go mod tidy
-go run main.go
-```
-Backend listens on `http://localhost:8080`.
-
-### 2) Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open `http://localhost:3000`.
-
-### 3) Authentication
-- Register: `POST /api/auth/register` with `{ "email": "...", "password": "..." }`
-- Login: `POST /api/auth/login` → returns `{ token }` stored by `/login` page
-
-`/api/forms/*` routes are protected with `Authorization: Bearer <token>`.
-
-### 4) CSV Export
-- Download responses: `GET /api/responses/:formId/export`
+> Built for the take‑home assessment. Focus areas: custom form logic, Go Fiber API, MongoDB data model, and a real‑time analytics dashboard with WebSocket updates.
 
 ---
 
-## Committing to GitHub
-- **Already set up:** `.gitignore` prevents committing local `.env` and build artifacts.
-- Commit the `backend/.env.example` (not your real `.env`).
-- Push the repo; in CI/hosting, configure `MONGO_URI` and `JWT_SECRET` as environment variables.
+## ✅ What’s Implemented (Required)
 
-## Notes
-- This repo uses a simple JWT auth for the take-home; for production, rotate `JWT_SECRET` and use HTTPS.
-- If port `8080` is busy, set `PORT` in `backend/.env` and update `frontend/next.config.js` rewrite target accordingly.
+- **Form Builder (Next.js + Tailwind)**
+  - Field types: **text, textarea, email, number, multiple choice, checkbox, rating**
+  - **Drag‑and‑drop** reordering
+  - **Required** flags & client validation
+  - **Custom form logic** (no Formik/React Hook Form)
+  - Drafts in local state for smooth UX
+
+- **Feedback / Share Page**
+  - Unique **shareable link** per form
+  - Public submission tied to that form
+
+- **Backend (Go Fiber + MongoDB)**
+  - REST APIs to **create / update / delete / get** forms
+  - **Submit responses** with server‑side validation
+  - **Get analytics** with per‑field breakdowns
+
+- **Real‑Time Updates**
+  - **WebSocket** broadcast on every new response
+  - Analytics dashboard **auto‑refreshes** (no manual reloads)
+
+- **Analytics Dashboard**
+  - Per‑field charts:
+    - Multiple choice / Checkbox → option **distribution**
+    - Rating → **average** & **distribution**
+    - Text → latest **samples**
+    - Number → **avg / min / max**
+
+---
+
+## ✨ Optional Features (Implemented)
+
+- **CSV Export** — `GET /api/responses/:formId/csv` & button on analytics page  
+- **Dark Mode** — toggle in the header, persisted via `localStorage`  
+- **Survey Trends** — returned by the analytics API and rendered in the dashboard:
+  - **Rating over time** (`ratingOverTime`)
+  - **Most‑skipped questions** (`mostSkipped`)
+  - **Top options** for choice fields (`topOptions`)
+
+> Optional features not included: conditional fields, authentication/JWT, PDF export, unit tests.
+
+---
+
+## 🧱 Tech Stack
+
+- **Frontend:** Next.js 14 (App Router), React 18, TailwindCSS, **Recharts**  
+- **Backend:** Go 1.21, **Fiber**, `github.com/gofiber/websocket/v2`  
+- **Database:** MongoDB  
+- **Realtime:** WebSocket (server broadcast + client listener)
+
+---
+
+## 📁 Project Structure
+
+```
+backend/
+  handlers/            # Fiber HTTP handlers (forms, responses, analytics, export)
+  models/              # Mongo models & DTOs
+  websocket/           # Hub + connection handling
+  main.go              # app wiring, CORS, routes, WS
+
+frontend/
+  app/                 # Next.js app router pages (builder, share, analytics, etc.)
+  components/          # FormBuilder, AnalyticsDashboard, ThemeToggle, etc.
+  hooks/               # useWebSocket
+  styles / app/globals.css
+  tailwind.config.js
+  next.config.js       # rewrites to backend (API + WS)
+```
+
+---
+
+## ⚙️ Setup
+
+### Prereqs
+- Node.js 18+
+- Go 1.21+
+- MongoDB (local or Atlas)
+
+### Backend
+Create `backend/.env` (or rely on system env vars):
+
+```
+MONGO_URI=mongodb://127.0.0.1:27017
+PORT=8081
+```
+
+Run:
+```bash
+cd backend
+go run main.go
+```
+Server starts on **http://localhost:8081** by default.
+
+### Frontend
+Rewrites to your backend (already configured):
+
+```js
+// frontend/next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: "http://localhost:8081/api/:path*" },
+      { source: "/ws", destination: "http://localhost:8081/ws" },
+    ];
+  },
+};
+module.exports = nextConfig;
+```
+
+Install & run:
+```bash
+cd frontend
+npm i
+npm run dev
+```
+Open **http://localhost:3000**.
+
+---
+
+## 🧪 How to Test Real‑Time Analytics
+
+1. Create a form with **text, multiple choice, checkbox, rating**.
+2. Open the **share** link in a new tab/incognito; submit several varied responses.
+3. Open `/analytics/:formId`:
+   - Cards show **Total** and **Recent (24h)** counts
+   - Charts render for choice/checkbox
+   - Rating **average & distribution**
+   - Latest **text** samples
+4. Keep analytics open → submit another response → dashboard updates **automatically** (WebSocket).
+
+---
+
+## 🔌 API (selected)
+
+### Forms
+- `GET /api/forms` — list
+- `POST /api/forms` — create
+- `GET /api/forms/:id` — get by id
+- `PUT /api/forms/:id` — update
+- `DELETE /api/forms/:id` — delete
+- `GET /api/forms/shareable/:shareableLink` — get by public link
+
+### Responses
+- `POST /api/responses` — submit
+- `GET /api/responses/:formId` — list (debug)
+- `GET /api/responses/:formId/csv` — **export CSV** ✅
+
+### Analytics
+- `GET /api/analytics/:formId` — **per‑field stats + trends** ✅
+  - `fieldAnalytics`: per field
+    - `optionCounts`, `averageRating`, `ratingDistribution`, `textResponses`, `numberSummary`
+  - `ratingOverTime`: `[ { date, average } ]`
+  - `mostSkipped`: `[ { fieldId, fieldLabel, count } ]`
+  - `topOptions`: `{ [fieldId]: { option, count } }`
+
+### WebSocket
+- `GET /ws` — broadcasts `{ type: "new_response", data: { formId } }` after each submission
+
+---
+
+## 🗃️ Data Model (excerpt)
+
+```go
+// models.Field (Go)
+type Field struct {
+  ID       string     `json:"id" bson:"id"`
+  Type     FieldType  `json:"type" bson:"type"` // text | textarea | email | number | multiple_choice | checkbox | rating
+  Label    string     `json:"label" bson:"label"`
+  Required bool       `json:"required" bson:"required"`
+  Options  []string   `json:"options,omitempty" bson:"options,omitempty"`
+  Order    int        `json:"order" bson:"order"`
+  MinValue *int       `json:"minValue,omitempty" bson:"minValue,omitempty"`
+  MaxValue *int       `json:"maxValue,omitempty" bson:"maxValue,omitempty"`
+}
+
+type FieldStats struct {
+  FieldID            string         `json:"fieldId"`
+  FieldLabel         string         `json:"fieldLabel"`
+  FieldType          FieldType      `json:"fieldType"`
+  ResponseCount      int            `json:"responseCount"`
+  AverageRating      *float64       `json:"averageRating,omitempty"`
+  RatingDistribution map[string]int `json:"ratingDistribution,omitempty"` // string keys for JSON
+  OptionCounts       map[string]int `json:"optionCounts,omitempty"`
+  TextResponses      []string       `json:"textResponses,omitempty"`
+  NumberSummary      *NumberSummary `json:"numberSummary,omitempty"`
+}
+```
+
+---
+
+## 🧠 Design Notes & Assumptions
+
+- **Custom form logic** with React hooks (no external form lib) to meet the requirement.
+- **Flexible responses** stored as `map[string]interface{}` keyed by field ID.
+- **Server‑side validation** mirrors field config: required, email format, numeric/rating ranges, options correctness.
+- **On‑the‑fly analytics** for demo scale; could be materialized for large datasets.
+- **Dark Mode** with `darkMode: "class"` and a simple header toggle.
+
+---
+
+## 🧩 Challenges & How They Were Resolved
+
+- **JSON error: `map[float64]int` not serializable**
+  - Cause: Go JSON cannot encode maps with non‑string keys.
+  - Fix: Use **`map[string]int`** for `ratingDistribution` (convert float keys to strings).
+
+- **Handler helper collisions / undefined functions**
+  - Cause: Duplicate or missing helpers (`toString`, `asFloat`, `splitCSV`).
+  - Fix: Use **locally‑named helpers** in `analytics_handlers.go` (e.g., `toStringLocal`) to avoid redeclaration, or centralize in one file.
+
+- **Missing model fields used by handlers**
+  - Cause: Handlers referenced `Field.Order`, `MinValue`, `MaxValue`.
+  - Fix: Added those fields to `models.Field` and re‑aligned validation & analytics.
+
+- **Frontend TS error: “Type annotations can only be used in TypeScript files”**
+  - Causes: (a) Pasted TS into `tailwind.config.js`; (b) VS Code treating `.tsx` as JS.
+  - Fixes: Restored Tailwind config, kept React code in `layout.tsx`, set language mode to **TypeScript React** (temporary unblock: remove prop type annotations).
+
+- **Tailwind `bg-primary-*` / `ring-primary-*` not found**
+  - Cause: Custom color `primary` not defined.
+  - Fix: Switched to built‑in `blue-*` utilities (or define `primary` in `tailwind.config.js`).
+
+- **Frontend proxy `ECONNREFUSED`**
+  - Cause: Backend running on a different port than rewrites.
+  - Fix: Standardized backend to **8081** and mapped rewrites accordingly.
+
+---
+
+## 🚧 Limitations / Future Work
+
+- Conditional field logic (show/hide based on previous answers)
+- Authentication & multi‑tenant form ownership
+- PDF export (in addition to CSV)
+- Unit & integration tests (FE/BE)
+- Server‑side caching / materialized analytics for large traffic
+
+---
+
+## 📝 Scripts
+
+```bash
+# Backend
+cd backend && go run main.go
+
+# Frontend
+cd frontend && npm run dev
+```
+
+---
+
+## 📄 License
+
+MIT
