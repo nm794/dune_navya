@@ -13,7 +13,7 @@ A dynamic, customizable form builder that lets users **create forms**, **collect
   - **Drag‑and‑drop** reordering
   - **Required** flags & client validation
   - **Custom form logic** (no Formik/React Hook Form)
-  - Drafts in local state for smooth UX
+  - **Drafts: saved locally on the client** (no server storage) so you don’t lose progress while editing
 
 - **Feedback / Share Page**
   - Unique **shareable link** per form
@@ -99,7 +99,7 @@ Run:
 cd backend
 go run main.go
 ```
-Server starts on **http://localhost:8081** by default.
+Server starts on **http://localhost:8081** (WebSocket: **ws://localhost:8081/ws**).
 
 ### Frontend
 Rewrites to your backend (already configured):
@@ -223,27 +223,17 @@ type FieldStats struct {
   - Cause: Handlers referenced `Field.Order`, `MinValue`, `MaxValue`.
   - Fix: Added those fields to `models.Field` and re‑aligned validation & analytics.
 
-- **Frontend TS error: “Type annotations can only be used in TypeScript files”**
-  - Causes: (a) Pasted TS into `tailwind.config.js`; (b) VS Code treating `.tsx` as JS.
-  - Fixes: Restored Tailwind config, kept React code in `layout.tsx`, set language mode to **TypeScript React** (temporary unblock: remove prop type annotations).
+- **VS Code/TS warning in `layout.tsx`**
+  - Cause: Editor treated `.tsx` as JS at one point; and TS code pasted into Tailwind config by mistake.
+  - Fix: Restored Tailwind config; kept React code in `layout.tsx`; ensured language mode is **TypeScript React** (temporary unblock: removed inline prop type annotations).
 
-- **Tailwind `bg-primary-*` / `ring-primary-*` not found**
-  - Cause: Custom color `primary` not defined.
-  - Fix: Switched to built‑in `blue-*` utilities (or define `primary` in `tailwind.config.js`).
+- **Tailwind `primary-*` not found**
+  - Cause: Custom `primary` color not defined.
+  - Fix: Switched to built‑in `blue-*` utilities.
 
 - **Frontend proxy `ECONNREFUSED`**
-  - Cause: Backend running on a different port than rewrites.
-  - Fix: Standardized backend to **8081** and mapped rewrites accordingly.
-
----
-
-## 🚧 Limitations / Future Work
-
-- Conditional field logic (show/hide based on previous answers)
-- Authentication & multi‑tenant form ownership
-- PDF export (in addition to CSV)
-- Unit & integration tests (FE/BE)
-- Server‑side caching / materialized analytics for large traffic
+  - Cause: Backend port mismatch.
+  - Fix: Standardized backend to **8081** and confirmed Next rewrites target `http://localhost:8081`.
 
 ---
 
